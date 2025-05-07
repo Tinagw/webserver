@@ -10,6 +10,7 @@
 #include<sys/stat.h>
 #include<assert.h>
 #include<unistd.h>
+#include<sys/sendfile.h>
 using namespace std;
 int initListenFD(unsigned short port)
 {
@@ -175,14 +176,26 @@ int sendfile(const char* filename, int cfd)
 	//读一部分发一部分
 	//1.打开文件
 	int fd = open(filename, O_RDONLY);
+#if 0
 	assert(fd > 0);//如果大于0直接挂掉程序
 	while (1) {
 		char buf[1024];
 		int len = read(fd, buf, sizeof buf);
 		if (len > 0) {
 			send(cfd, buf, len, 0);
+			usleep(10);//单位是微秒,这里非常重要，不要让数据发送太快
+		}
+		else if (len==0) {
+			break;
+		}
+		else {
+			perror("read");
 		}
 	}
+#else
+#endif
+	int size = lseek(fd, 0, SEEK_END);//文件描述符，偏移量，表示把指针移到最后
+	sendfile(cfd, fd, NULL, size);
 	return 0;
 }
 
