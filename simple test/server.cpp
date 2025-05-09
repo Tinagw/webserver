@@ -11,6 +11,7 @@
 #include<assert.h>
 #include<unistd.h>
 #include<sys/sendfile.h>
+#include<dirent.h>
 using namespace std;
 int initListenFD(unsigned short port)
 {
@@ -158,7 +159,9 @@ int parseRequestLine(const char* line, int cfd)
 	if (ret == -1) {
 		cout << "文件不存在" << endl;
 		//回复一个404页面
-
+		sendHeadMsg(cfd, 404, "Not Found",getFileType(".hmtl"),-1);
+		sendFile("404.html", cfd);
+		return 0;
 	}
 	//判断文件类型
 	if (S_ISDIR(st.st_mode)) {//如果是目录返回一，不是返回零
@@ -167,11 +170,13 @@ int parseRequestLine(const char* line, int cfd)
 	}
 	else {
 		//把文件内容发送客户端
+		sendHeadMsg(cfd, 200, "OK", getFileType(file), st.st_size);
+		sendFile(file, cfd);
 	}
 	return 0;
 }
 
-int sendfile(const char* filename, int cfd)
+int sendFile(const char* filename, int cfd)
 {
 	//读一部分发一部分
 	//1.打开文件
@@ -193,9 +198,69 @@ int sendfile(const char* filename, int cfd)
 		}
 	}
 #else
-#endif
 	int size = lseek(fd, 0, SEEK_END);//文件描述符，偏移量，表示把指针移到最后
 	sendfile(cfd, fd, NULL, size);
+#endif
 	return 0;
+}
+
+int sendHeadMsg(int cfd, int status, const char* descr, char* type, int length)
+{
+	//状态行
+	char buf[4096];
+	sprintf(buf, "http/1.1 %d %s\r\n", status, descr);
+	//响应头
+	sprintf(buf + strlen(buf), "content-type: %s\r\n", type);
+	sprintf(buf + strlen(buf), "content-length: %d\r\n\r\n", length);
+	send(cfd, buf, strlen(buf), 0);
+	return 0;
+}
+
+char* getFileType( char* name)
+{
+	struct FileType {
+		char* extension;
+		char* contentType;
+	};
+
+	FileType fileTypes[] = {
+		{".html", "text/html"},
+		{".htm", "text/html"},
+		{".txt", "text/plain"},
+		{".jpg", "image/jpeg"},
+		{".jpeg", "image/jpeg"},
+		{".png", "image/png"},
+		{".gif", "image/gif"},
+		{".css", "text/css"},
+		{".js", "application/javascript"},
+		{".json", "application/json"},
+		{".xml", "application/xml"},
+		{".pdf", "application/pdf"},
+		{".zip", "application/zip"},
+		{".mp3", "audio/mpeg"},
+		{".mp4", "video/mp4"},
+		{".avi", "video/x-msvideo"},
+		{".mov", "video/quicktime"},
+		{".swf", "application/x-shockwave-flash"},
+		{".ico", "image/x-icon"},
+		{".svg", "image/svg+xml"},
+		{".webp", "image/webp"},
+		{nullptr, nullptr} // 表示结束
+	};
+
+	// 获取文件名的后缀
+	const char* dot = strrchr(name, '.');
+	if (dot == nullptr) {
+		return "application/octet-stream"; // 默认类型
+	}
+
+	// 遍历对照表
+	for (int i = 0; fileTypes[i].extension != nullptr; ++i) {
+		if (strcmp(dot, fileTypes[i].extension) == 0) {
+			return fileTypes[i].contentType;
+		}
+	}
+
+	return "text/plain; charset=utf-8";//返回默认值
 }
 

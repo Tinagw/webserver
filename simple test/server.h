@@ -10,4 +10,8 @@ int recvHttpRequest(int cfd,int epfd);
 //解析请求行
 int parseRequestLine(const char* line, int cfd);
 //发送文件给客户端
-int sendfile(const char* filename, int cfd);
+int sendFile(const char* filename, int cfd);
+//发送响应头（状态加响应头）
+int sendHeadMsg(int cfd, int status, const char* descr,char *type,int length);
+//content-type 对照函数
+char* getFileType(char* name);
