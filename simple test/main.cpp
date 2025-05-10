@@ -16,6 +16,6 @@ int main(int argc,char* argv[])
     //初始化用于监听的套接字
     int lfd = initListenFD(port);//0-65535
     //启动服务
-    
+    epollRun(lfd);
     return 0;
 }

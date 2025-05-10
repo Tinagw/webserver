@@ -82,7 +82,6 @@ int epollRun(int lfd)
 	}
 	return 0;
 }
-
 int acceptClient(int lfd, int epfd)
 {
 	int cfd = accept(lfd, NULL, NULL);
@@ -122,6 +121,10 @@ int recvHttpRequest(int cfd, int epfd)
 	if (len == -1 && errno == EAGAIN) {
 		cout << "数据接收完毕" <<endl;
 		//解析请求行
+		char* pt = strstr(buf, "\r\n");//结束地址
+		int reqLen = pt - buf;
+		buf[reqLen] = '\0';
+		parseRequestLine(buf, cfd);
 	}
 	else if (len == 0) {
 		//客户端断开连接
@@ -166,7 +169,8 @@ int parseRequestLine(const char* line, int cfd)
 	//判断文件类型
 	if (S_ISDIR(st.st_mode)) {//如果是目录返回一，不是返回零
 		//发送本地目录内容
-
+		sendHeadMsg(cfd, 200, "OK", getFileType(".html"), -1);
+		sendDir(file, cfd);
 	}
 	else {
 		//把文件内容发送客户端
@@ -263,4 +267,49 @@ char* getFileType( char* name)
 
 	return "text/plain; charset=utf-8";//返回默认值
 }
+//查找文件
+//html格式
+int sendDir(const char* dirName, int cfd) {
+	char buf[4096];
+	sprintf(buf, "<html><head><title>%s</title></head><body><table>", dirName);
 
+	struct dirent** namelist;
+	int num = scandir(dirName, &namelist, NULL, alphasort); // 获得的文件全部存储在 namelist 里面
+	if (num == -1) {
+		perror("扫描目录失败");
+		return -1;
+	}
+	for (int i = 0; i < num; i++) {
+		// 取出文件名
+		char* name = namelist[i]->d_name;
+		struct stat st;
+		char subPath[1024]; // 文件路径
+		sprintf(subPath, "%s/%s", dirName, name);
+		if (stat(subPath, &st) == -1) {
+			perror("获取文件属性失败");
+			free(namelist[i]); // 释放当前文件名
+			continue;
+		}
+		if (S_ISDIR(st.st_mode)) {
+			// a 标签 <a href="">name</a>，a 标签的属性可以跳转
+			sprintf(buf + strlen(buf), "<tr><td><a href=\"%s/\">%s</a></td><td>%ld</td></tr>", name, name, st.st_size);
+		}
+		else {
+			sprintf(buf + strlen(buf), "<tr><td><a href=\"%s\">%s</a></td><td>%ld</td></tr>", name, name, st.st_size);
+		}
+		if (send(cfd, buf, strlen(buf), 0) == -1) {
+			perror("发送目录列表失败");
+			free(namelist[i]); // 释放当前文件名
+			return -1;
+		}
+		memset(buf, 0, sizeof(buf));
+		free(namelist[i]); // 释放当前文件名
+	}
+	free(namelist); // 释放文件名列表
+	sprintf(buf, "</table></body></html>");
+	if (send(cfd, buf, strlen(buf), 0) == -1) {
+		perror("发送目录列表结束标记失败");
+		return -1;
+	}
+	return 0;
+}

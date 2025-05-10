@@ -15,3 +15,5 @@ int sendFile(const char* filename, int cfd);
 int sendHeadMsg(int cfd, int status, const char* descr,char *type,int length);
 //content-type 对照函数
 char* getFileType(char* name);
+//发送目录
+int sendDir(const char* dirName, int cfd);
